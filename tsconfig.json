@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationDir": "./types"
+  },
+  "files": ["index.ts"]
+}
