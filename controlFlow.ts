@@ -1,10 +1,10 @@
-type ControlFlowStepsEntry = Promise<{
-  nextEvent: string;
+type ControlFlowStepsEntry = {
+  nextEvent?: string;
   [key: string]: any;
-}>;
+};
 
 type ControlFlowSteps<T> = {
-  entry?: (arg: T) => ControlFlowStepsEntry;
+  entry?: (arg: T) => Promise<ControlFlowStepsEntry>;
   final?: boolean;
   [key: string]: any;
 };
@@ -18,12 +18,18 @@ type ControlFlowArgs<T> = {
   logSteps: boolean;
 };
 
+type ControlFlowReturn = {
+  step: string;
+  data?: any;
+  event?: string;
+};
+
 async function* createControlFlow<T>({
   initialStep,
   steps,
   stepContext,
   logSteps = false,
-}: ControlFlowArgs<T>) {
+}: ControlFlowArgs<T>): AsyncGenerator<ControlFlowReturn> {
   let currentStep = initialStep;
   let currentConfig = steps[currentStep];
   while (true) {
@@ -38,7 +44,7 @@ async function* createControlFlow<T>({
         `Entered step ${currentStep} which is not a final step but does not have an entry action`
       );
     }
-    let data: any;
+    let data: ControlFlowStepsEntry;
     let nextEvent: string;
     try {
       data = await currentConfig.entry(stepContext);
@@ -67,11 +73,7 @@ export default async function controlFlow<T>({
   steps,
   stepContext,
   logSteps,
-}: ControlFlowArgs<T>): Promise<{
-  step: string;
-  data: any;
-  event?: string;
-}> {
+}: ControlFlowArgs<T>): Promise<ControlFlowReturn> {
   const controlFlowInstance = createControlFlow<T>({
     initialStep,
     steps,
