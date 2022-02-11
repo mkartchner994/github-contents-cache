@@ -1,4 +1,4 @@
-import { request } from "https";
+import { request } from "follow-redirects/https";
 import { extname } from "path";
 
 type FetchContentArgs = {
@@ -18,7 +18,7 @@ type FetchContentReturn =
     }
   | {
       statusCode: 200 | 304 | 404;
-      content?: string;
+      content?: string | string[];
       etag?: string;
     };
 
@@ -31,7 +31,14 @@ export default async function fetchContent({
 }: FetchContentArgs): Promise<FetchContentReturn> {
   return await new Promise((resolve, reject) => {
     const isFile = extname(path);
-    const req = request(
+    if (!isFile) {
+      return reject(
+        new Error(
+          `The path ${path} is not a file with an extension, which is currenlty not supported in the github-contents-cache library`
+        )
+      );
+    }
+    request(
       {
         hostname: "api.github.com",
         port: 443,
@@ -48,9 +55,6 @@ export default async function fetchContent({
         if (res.statusCode === 200) {
           const chunks = [];
           res
-            .on("error", (error) => {
-              reject("could_not_parse_response");
-            })
             .on("data", (chunk) => {
               chunks.push(chunk);
             })
@@ -58,21 +62,20 @@ export default async function fetchContent({
               try {
                 const bodyString = Buffer.concat(chunks).toString();
                 const json = JSON.parse(bodyString);
-                let content = json;
-                if (isFile) {
-                  content = Buffer.from(json.content, "base64").toString(
-                    "utf-8"
-                  );
-                } else {
-                  content = json.map((file) => file.name);
-                }
+                let content = Buffer.from(json.content, "base64").toString(
+                  "utf-8"
+                );
                 resolve({
                   statusCode: 200,
                   content: content,
                   etag: res.headers.etag,
                 });
               } catch (error) {
-                reject("could_not_parse_response");
+                reject(
+                  new Error(
+                    "Received a 200 response from GitHub but could not parse the response body"
+                  )
+                );
               }
             });
         } else if (res.statusCode === 304) {
@@ -82,7 +85,7 @@ export default async function fetchContent({
           resolve({ statusCode: 404 });
         } else if (
           res.statusCode === 403 &&
-          typeof res.headers?.["x-ratelimit-remaining"] === "string" &&
+          res.headers["x-ratelimit-remaining"] &&
           res.headers["x-ratelimit-remaining"].trim() === "0"
         ) {
           // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limit-http-headers
@@ -97,15 +100,23 @@ export default async function fetchContent({
             remaining,
             timestampTillNextResetInSeconds,
           });
+        } else if (res.statusCode === 401 || res.statusCode === 403) {
+          reject(
+            new Error(
+              `Received HTTP response status code ${res.statusCode} from GitHub. This means bad credentials were provided or you do not have access to the resource`
+            )
+          );
         } else {
-          reject("unsupported_status_code");
+          reject(
+            new Error(
+              `Received HTTP response status code ${res.statusCode} from GitHub which is not an actionable code for the github-contents-cache library`
+            )
+          );
         }
       }
-    );
-
-    req
+    )
       .on("error", (error) => {
-        reject("could_not_complete_request");
+        reject(new Error("Could not complete request to the GitHub api"));
       })
       .end();
   });

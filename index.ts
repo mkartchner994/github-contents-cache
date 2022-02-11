@@ -10,8 +10,12 @@ type CacheContent =
     }
   | { type: "notFound"; time: number };
 
+export type CacheGetReturn = CacheContent | void;
+
+export type SerializeArg = string | string[];
+
 type Cache = {
-  get: (path: string) => Promise<CacheContent | null | undefined>;
+  get: (path: string) => Promise<CacheGetReturn>;
   set: (path: string, entry: CacheContent) => Promise<any>;
   remove: (path: string) => Promise<any>;
 };
@@ -21,10 +25,10 @@ type GetGithubContentArgs = {
   owner: string;
   repo: string;
   path: string;
-  ignoreCache: boolean;
   cache: Cache;
+  ignoreCache?: boolean;
   max404CacheTimeInMilliseconds?: number;
-  serialize?: (content: string) => Promise<any>;
+  serialize?: (content: SerializeArg) => Promise<any>;
 };
 
 type GetGithubContentReturn =
@@ -37,6 +41,11 @@ type GetGithubContentReturn =
       timestampTillNextResetInSeconds: number;
       content?: any; // If we have hit our rate limit but we still have a cached value
       cacheHit?: boolean;
+    }
+  | {
+      status: "error";
+      message: string;
+      error: Error;
     };
 
 type GetGithubContentStepContext = {
@@ -59,13 +68,18 @@ export default async function getGithubContent({
   owner,
   repo,
   path,
-  ignoreCache,
   cache,
+  ignoreCache = false,
   max404CacheTimeInMilliseconds = Infinity,
   serialize = async (content) => content,
 }: GetGithubContentArgs): Promise<GetGithubContentReturn> {
+  if (!token || !owner || !repo || !path || !cache) {
+    throw new Error(
+      "Please provide all of the required arguments - { token, owner, repo, path, cache }"
+    );
+  }
+
   let result = await controlFlow<GetGithubContentStepContext>({
-    logSteps: false,
     initialStep: ignoreCache ? "clearCacheEntry" : "lookInCache",
     stepContext: {
       cache,
@@ -125,22 +139,32 @@ export default async function getGithubContent({
       cacheHit: result.data.cacheHit,
     };
   }
-  throw new Error("could_not_get_content");
+  if (result.step == "error") {
+    return {
+      status: "error",
+      message: result.data.message,
+      error: result.data.error,
+    };
+  }
 }
 
 ////// Entry Functions
 //////
 
-async function clearCacheEntry(stepContext: GetGithubContentStepContext) {
+const clearCacheEntry = async (stepContext: GetGithubContentStepContext) => {
   try {
     await stepContext.cache.remove(stepContext.path);
     return { nextEvent: "onCachedCleared" };
   } catch (error) {
-    return { nextEvent: "onError" };
+    return {
+      nextEvent: "onError",
+      message: `Error when trying to remove entry from the cache at path ${stepContext.path}`,
+      error,
+    };
   }
-}
+};
 
-async function lookInCache(stepContext: GetGithubContentStepContext) {
+const lookInCache = async (stepContext: GetGithubContentStepContext) => {
   {
     try {
       const cachedResults = await stepContext.cache.get(stepContext.path);
@@ -163,73 +187,97 @@ async function lookInCache(stepContext: GetGithubContentStepContext) {
     } catch (error) {
       return {
         nextEvent: "onError",
+        message: `Error when trying to get entry from the cache at path ${stepContext.path}`,
+        error,
       };
     }
   }
-}
+};
 
-async function lookInGithub(stepContext: GetGithubContentStepContext) {
+const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
   try {
     let resp = await fetchContent({
       token: stepContext.token,
       owner: stepContext.owner,
       repo: stepContext.repo,
       path: stepContext.path,
-      etag: stepContext?.cachedResults?.etag,
+      etag: stepContext.cachedResults && stepContext.cachedResults.etag,
     });
     // If the content isn't modified return what is in our cache
     if (resp.statusCode === 304) {
       return {
         nextEvent: "onFound",
-        content: stepContext?.cachedResults?.content,
+        content: stepContext.cachedResults.content,
         cacheHit: true,
       };
     }
     // This file wasn't found in github, cache the 404 response so we don't hit our api limit
     // Using the time field with the max404CacheTimeInMilliseconds option to expire this cache entry
     if (resp.statusCode === 404) {
-      stepContext.cache
-        .set(stepContext.path, { time: Date.now(), type: "notFound" })
-        .catch(() => {});
+      try {
+        await stepContext.cache.set(stepContext.path, {
+          time: Date.now(),
+          type: "notFound",
+        });
+      } catch (error) {
+        // Ignore errors we get if trying to set content to the cache
+        // These should be handled in the cache.set method by the caller
+      }
       return { nextEvent: "on404FromGithub", cacheHit: false };
     }
-    // We
+    // There has probably been a mistake with the cache logic we've been provided?
+    // Or this is actual demand which is a good problem to have, but we need to figure it out
     if (resp.statusCode === 403) {
       return {
         nextEvent: "onRateLimitExceeded",
         limit: resp.limit,
         remaining: resp.remaining,
         timestampTillNextResetInSeconds: resp.timestampTillNextResetInSeconds,
-        content: stepContext?.cachedResults?.content,
-        cacheHit: stepContext?.cachedResults?.content ? true : false,
+        content:
+          (stepContext.cachedResults && stepContext.cachedResults.content) ??
+          "",
+        cacheHit:
+          stepContext.cachedResults && stepContext.cachedResults.content
+            ? true
+            : false,
       };
     }
 
-    let content;
     try {
-      content = await stepContext.serialize(resp.content);
+      resp.content = await stepContext.serialize(resp.content);
     } catch (error) {
-      return { nextEvent: "onError" };
+      return {
+        nextEvent: "onError",
+        message: "Error occured when serializing the content",
+        error,
+      };
     }
 
-    stepContext.cache
-      .set(stepContext.path, {
+    try {
+      await stepContext.cache.set(stepContext.path, {
         type: "found",
         time: Date.now(),
-        content: content,
+        content: resp.content,
         etag: resp.etag,
-      })
-      .catch(() => {});
+      });
+    } catch (error) {
+      // Ignore errors we get if trying to set content to the cache
+      // These should be handled in the cache.set method by the caller
+    }
 
     return {
       nextEvent: "onFound",
-      content: content,
+      content: resp.content,
       cacheHit: false,
     };
   } catch (error: any) {
     // We didn't get back what we expected from the github api, but we have it cached
     // so lets return that
-    if (stepContext?.cachedResults?.content) {
+    if (stepContext.cachedResults && stepContext.cachedResults.content) {
+      console.warn(
+        "Received an unexpected error, but returning the value from the cache",
+        error
+      );
       return {
         nextEvent: "onFound",
         content: stepContext.cachedResults.content,
@@ -237,7 +285,10 @@ async function lookInGithub(stepContext: GetGithubContentStepContext) {
       };
     }
     // Treat anything else as an internal server error
-    return { nextEvent: "onError" };
+    return {
+      nextEvent: "onError",
+      message: `Unexpected error when looking for content on GitHub at path ${stepContext.path}`,
+      error,
+    };
   }
-}
-
+};
