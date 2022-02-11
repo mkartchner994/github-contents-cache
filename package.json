@@ -1,12 +1,15 @@
 {
-  "name": "@mkartchner994/github-contents-cache",
+  "name": "github-contents-cache",
   "version": "0.0.1",
   "description": "A helpful utility function for retreiving and caching file contents from the GitHub api",
   "main": "dist/index.js",
   "types": "types/index.d.ts",
   "files": ["dist", "types"],
   "scripts": {
-    "build": "rm -rf ./dist/ && rm -rf ./types/ && esbuild index.ts --bundle --outfile=dist/index.js --platform=node --target=node14 && tsc --project tsconfig.json",
+    "build": "npm test && npm run build:cleanDirs && npm run build:esbuild && npm run build:tsc",
+    "build:cleanDirs": "rm -rf ./dist/ && rm -rf ./types/",
+    "build:esbuild": "esbuild index.ts --bundle --outfile=dist/index.js --platform=node --target=node14 --external:./node_modules/*",
+    "build:tsc": "tsc --project tsconfig.json",
     "test": "jest"
   },
   "repository": {
