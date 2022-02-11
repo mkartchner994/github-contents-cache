@@ -1,7 +1,7 @@
 import controlFlow from "./controlFlow";
-import fetchContent from "./github";
+import fetchContent from "./fetchContent";
 
-type CacheContent =
+type GetGithubContentCacheEntry =
   | {
       type: "found";
       time: number;
@@ -10,13 +10,14 @@ type CacheContent =
     }
   | { type: "notFound"; time: number };
 
-export type CacheGetReturn = CacheContent | void;
+type GetGithubContentCacheGetReturn =
+  | GetGithubContentCacheEntry
+  | null
+  | undefined;
 
-export type SerializeArg = string | string[];
-
-type Cache = {
-  get: (path: string) => Promise<CacheGetReturn>;
-  set: (path: string, entry: CacheContent) => Promise<any>;
+export type GetGithubContentCache = {
+  get: (path: string) => Promise<GetGithubContentCacheGetReturn>;
+  set: (path: string, entry: GetGithubContentCacheEntry) => Promise<any>;
   remove: (path: string) => Promise<any>;
 };
 
@@ -25,14 +26,15 @@ type GetGithubContentArgs = {
   owner: string;
   repo: string;
   path: string;
-  cache: Cache;
+  userAgent: string;
+  cache: GetGithubContentCache;
   ignoreCache?: boolean;
   max404CacheTimeInMilliseconds?: number;
-  serialize?: (content: SerializeArg) => Promise<any>;
+  serialize?: (content: string) => Promise<any>;
 };
 
 type GetGithubContentReturn =
-  | { status: "found"; content: string; cacheHit: boolean }
+  | { status: "found"; content: any; cacheHit: boolean }
   | { status: "notFound"; content: ""; cacheHit: boolean }
   | {
       status: "rateLimitExceeded";
@@ -49,11 +51,12 @@ type GetGithubContentReturn =
     };
 
 type GetGithubContentStepContext = {
-  cache: Cache;
+  cache: GetGithubContentCache;
   token: GetGithubContentArgs["token"];
   owner: GetGithubContentArgs["owner"];
   repo: GetGithubContentArgs["repo"];
   path: GetGithubContentArgs["path"];
+  userAgent: GetGithubContentArgs["userAgent"];
   max404CacheTimeInMilliseconds: GetGithubContentArgs["max404CacheTimeInMilliseconds"];
   serialize: GetGithubContentArgs["serialize"];
   cachedResults?: {
@@ -68,14 +71,15 @@ export default async function getGithubContent({
   owner,
   repo,
   path,
+  userAgent,
   cache,
   ignoreCache = false,
   max404CacheTimeInMilliseconds = Infinity,
-  serialize = async (content) => content,
+  serialize = async (content: string) => content,
 }: GetGithubContentArgs): Promise<GetGithubContentReturn> {
-  if (!token || !owner || !repo || !path || !cache) {
+  if (!token || !owner || !repo || !path || !userAgent || !cache) {
     throw new Error(
-      "Please provide all of the required arguments - { token, owner, repo, path, cache }"
+      "Please provide all of the required arguments - { token, owner, repo, path, userAgent, cache }"
     );
   }
 
@@ -87,6 +91,7 @@ export default async function getGithubContent({
       owner,
       repo,
       path,
+      userAgent,
       serialize,
       max404CacheTimeInMilliseconds,
     },
@@ -201,6 +206,7 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
       owner: stepContext.owner,
       repo: stepContext.repo,
       path: stepContext.path,
+      userAgent: stepContext.userAgent,
       etag: stepContext.cachedResults && stepContext.cachedResults.etag,
     });
     // If the content isn't modified return what is in our cache
@@ -292,3 +298,45 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
     };
   }
 };
+
+// function Cache() {
+//   return {
+//     get: async () => {
+//       return null;
+//     },
+//     set: async () => {},
+//     remove: async () => {},
+//   };
+// }
+
+// type SerialzedReturn = {
+//   normal: string;
+//   compiled: string;
+// };
+
+// getGithubContent({
+//   token: "123",
+//   owner: "mkartchner994",
+//   repo: "remix",
+//   path: "content/why-i-like-remix.mdx",
+//   userAgent: "GitHub user mkartchner994 personal blog",
+//   // @todo figure this out
+//   serialize: async (): Promise<SerialzedReturn> => {
+//     return { normal: "123", compiled: "123", poo: 123 };
+//   },
+//   cache: Cache(),
+// }).then((data) => {
+//   if (data.status === "found") {
+//     const content = data.content as SerialzedReturn;
+//     // data.content = data.content as unknown as SerialzedReturn;
+//   }
+//   if (data.status === "notFound") {
+//     data.content;
+//   }
+//   if (data.status === "rateLimitExceeded") {
+//     data?.content?.compiled;
+//   }
+//   if (data.status === "error") {
+//     data.message;
+//   }
+// });

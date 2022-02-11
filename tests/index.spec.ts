@@ -1,4 +1,4 @@
-import getGithubContent, { CacheGetReturn } from "../index";
+import getGithubContent, { GetGithubContentCache } from "../index";
 import {
   CONTENT,
   CONTENT_UPDATED,
@@ -15,9 +15,9 @@ import {
   internalServerErrorOnGitHub,
 } from "./mswServers";
 
-function Cache({ foundInCache = false, type404 = false }) {
+function Cache({ foundInCache = false, type404 = false }): GetGithubContentCache {
   return {
-    get: async (): Promise<CacheGetReturn> => {
+    get: async () => {
       if (foundInCache === false) {
         return null;
       }
@@ -47,6 +47,7 @@ function getContentFromMkartchner994(args) {
     owner: "mkartchner994",
     repo: "github-contents-cache",
     path: "test-file.mdx",
+    userAgent: "Github user mkartchner994 personal blog", 
     ...args,
   });
 }
@@ -57,6 +58,7 @@ function getContentFromMkartchner994Dir(args) {
     owner: "mkartchner994",
     repo: "github-contents-cache",
     path: "contentDir",
+    userAgent: "Github user mkartchner994 personal blog",
     ...args,
   });
 }
@@ -66,7 +68,7 @@ test(`An error is thrown if not all of the required arguments are provided`, asy
   await expect(
     getContentFromMkartchner994({}) // not providing cache
   ).rejects.toThrowError(
-    "Please provide all of the required arguments - { token, owner, repo, path, cache }"
+    "Please provide all of the required arguments - { token, owner, repo, path, userAgent, cache }"
   );
   badCreds.close();
 });
@@ -196,7 +198,7 @@ test(`FOUND in cache, UPDATE NOT FOUND in GitHub - return { status: "found", cac
     serialize: serialize,
     cache: cache,
   });
-  const cachedResults = await cache.get();
+  const cachedResults = await cache.get("test-file.mdx");
   const expectedResponse = {
     status: "found",
     // @ts-ignore
@@ -215,7 +217,7 @@ test(`FOUND in cache, UPDATE FOUND in GitHub - return { status: "found", cacheHi
     ignoreCache: false,
     cache: cache,
   });
-  const cachedResults = await cache.get();
+  const cachedResults = await cache.get("test-file.mdx");
   // @ts-ignore
   expect(cachedResults?.type).toEqual("found");
   // @ts-ignore
@@ -291,7 +293,7 @@ test(`FOUND in cache, GitHub rate limit exceeded - return { status: "rateLimitEx
     ignoreCache: false,
     cache: cache,
   });
-  const cachedResults = await cache.get();
+  const cachedResults = await cache.get("test-file.mdx");
   const expectedResponse = {
     status: "rateLimitExceeded",
     limit: 5000,
@@ -347,7 +349,7 @@ test(`FOUND in cache, INTERNAL SERVER ERROR from GitHub - return { status: "foun
     ignoreCache: false,
     cache: cache,
   });
-  const cachedResults = await cache.get();
+  const cachedResults = await cache.get("test-file.mdx");
   const expectedResponse = {
     status: "found",
     // @ts-ignore

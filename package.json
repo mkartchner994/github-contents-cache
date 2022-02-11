@@ -1,12 +1,13 @@
 {
-  "name": "github-contents-cache",
-  "version": "1.0.0",
+  "name": "@mkartchner994/github-contents-cache",
+  "version": "0.0.1",
   "description": "",
-  "main": "index.js",
+  "main": "dis/index.js",
+  "types": "types/index.d.ts",
+  "files": ["dist", "types"],
   "scripts": {
-    "build": "esbuild index.ts --bundle --outfile=dist/index.js --platform=node --target=node14 && tsc --project tsconfig.json",
-    "test": "jest",
-    "dev": "node -r esbuild-register index.ts"
+    "build": "rm -rf ./dist/ && rm -rf ./types/ && esbuild index.ts --bundle --outfile=dist/index.js --platform=node --target=node14 && tsc --project tsconfig.json",
+    "test": "jest"
   },
   "repository": {
     "type": "git",

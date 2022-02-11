@@ -6,6 +6,7 @@ type FetchContentArgs = {
   owner: string;
   repo: string;
   path: string;
+  userAgent: string;
   etag?: string;
 };
 
@@ -18,7 +19,7 @@ type FetchContentReturn =
     }
   | {
       statusCode: 200 | 304 | 404;
-      content?: string | string[];
+      content?: string;
       etag?: string;
     };
 
@@ -27,6 +28,7 @@ export default async function fetchContent({
   repo,
   path,
   token,
+  userAgent,
   etag,
 }: FetchContentArgs): Promise<FetchContentReturn> {
   return await new Promise((resolve, reject) => {
@@ -46,7 +48,8 @@ export default async function fetchContent({
         method: "GET",
         headers: {
           accept: "application/vnd.github.v3+json",
-          "user-agent": "github-contents-cache package on npm",
+          // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#user-agent-required
+          "user-agent": userAgent,
           authorization: `token ${token}`,
           ...(etag ? { "If-None-Match": etag } : {}),
         },
