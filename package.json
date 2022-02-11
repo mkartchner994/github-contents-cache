@@ -1,8 +1,8 @@
 {
   "name": "@mkartchner994/github-contents-cache",
   "version": "0.0.1",
-  "description": "",
-  "main": "dis/index.js",
+  "description": "A helpful utility function for retreiving and caching file contents from the GitHub api",
+  "main": "dist/index.js",
   "types": "types/index.d.ts",
   "files": ["dist", "types"],
   "scripts": {
@@ -13,8 +13,8 @@
     "type": "git",
     "url": "git+https://github.com/mkartchner994/github-contents-cache.git"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Morgan Kartchner",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/mkartchner994/github-contents-cache/issues"
   },
