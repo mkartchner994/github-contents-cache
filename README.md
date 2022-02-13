@@ -37,6 +37,8 @@ Current version supported is >=14
 import getContentsFromGithub from "github-contents-cache";
 
 try {
+  // Currently, this will only pull content from the default branch of the repo but we may look
+  // at adding the ability to define a different branch in the future.
   const results = await getContentsFromGithub({
     // REQUIRED: Personal access token with repo scope - https://github.com/settings/tokens
     // As always with access tokens, be careful to not commit your token!
