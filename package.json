@@ -1,7 +1,7 @@
 {
   "name": "github-contents-cache",
   "version": "0.0.2",
-  "description": "A helpful utility function for retreiving and caching file contents from the GitHub api",
+  "description": "A helpful utility for retrieving and caching file contents from GitHub's contents api",
   "main": "dist/index.js",
   "types": "types/index.d.ts",
   "files": ["dist", "types"],
