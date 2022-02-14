@@ -1,3 +1,7 @@
+# Status
+
+Notice: This library is still in alpha and the api and some of the caching logic could still change.
+
 # github-contents-cache
 
 A helpful utility for retrieving and caching file contents from GitHub's contents API.
