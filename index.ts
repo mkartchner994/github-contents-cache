@@ -29,6 +29,7 @@ type GetGithubContentArgs = {
   userAgent: string;
   cache: GetGithubContentCache;
   ignoreCache?: boolean;
+  maxAgeInMilliseconds?: number;
   max404CacheTimeInMilliseconds?: number;
   serialize?: (content: string) => Promise<any>;
 };
@@ -57,6 +58,7 @@ type GetGithubContentStepContext = {
   repo: GetGithubContentArgs["repo"];
   path: GetGithubContentArgs["path"];
   userAgent: GetGithubContentArgs["userAgent"];
+  maxAgeInMilliseconds: GetGithubContentArgs["maxAgeInMilliseconds"];
   max404CacheTimeInMilliseconds: GetGithubContentArgs["max404CacheTimeInMilliseconds"];
   serialize: GetGithubContentArgs["serialize"];
   cachedResults?: {
@@ -73,6 +75,7 @@ export default async function getGithubContent({
   path,
   userAgent,
   cache,
+  maxAgeInMilliseconds,
   ignoreCache = false,
   max404CacheTimeInMilliseconds = Infinity,
   serialize = async (content: string) => content,
@@ -93,6 +96,7 @@ export default async function getGithubContent({
       path,
       userAgent,
       serialize,
+      maxAgeInMilliseconds,
       max404CacheTimeInMilliseconds,
     },
     steps: {
@@ -103,6 +107,7 @@ export default async function getGithubContent({
       },
       lookInCache: {
         entry: lookInCache,
+        onFound: "found", // Found in the cache and the maxAgeInMilliseconds had not yet expired
         onFoundInCache: "lookInGithub", // Ask github if what we have in cache is stale (Does Not count against our api limit)
         onNotInCache: "lookInGithub", // Ask for it from github (Does count against our api limit)
         on404CacheExpired: "clearCacheEntry", // We found a cache 404 but it has expired
@@ -186,6 +191,18 @@ const lookInCache = async (stepContext: GetGithubContentStepContext) => {
           return { nextEvent: "on404CacheExpired" };
         }
         return { nextEvent: "on404InCache", cacheHit: true };
+      }
+      if (stepContext.maxAgeInMilliseconds) {
+        if (
+          Date.now() - cachedResults.time <=
+          stepContext.maxAgeInMilliseconds
+        ) {
+          return {
+            nextEvent: "onFound",
+            content: cachedResults.content,
+            cacheHit: true,
+          };
+        }
       }
       stepContext.cachedResults = cachedResults;
       return { nextEvent: "onFoundInCache" };

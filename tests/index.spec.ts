@@ -15,7 +15,11 @@ import {
   internalServerErrorOnGitHub,
 } from "./mswServers";
 
-function Cache({ foundInCache = false, type404 = false }): GetGithubContentCache {
+function Cache({
+  foundInCache = false,
+  type404 = false,
+  typeMaxAge = false,
+}): GetGithubContentCache {
   return {
     get: async () => {
       if (foundInCache === false) {
@@ -27,7 +31,8 @@ function Cache({ foundInCache = false, type404 = false }): GetGithubContentCache
       }
       return {
         type: "found",
-        time: Date.now(),
+        // time - assume this was cached 5 seconds in the past if we are testing maxAge
+        time: typeMaxAge ? Date.now() - 5000 : Date.now(),
         content: CONTENT,
         etag: ETAG,
       };
@@ -47,7 +52,7 @@ function getContentFromMkartchner994(args) {
     owner: "mkartchner994",
     repo: "github-contents-cache",
     path: "test-file.mdx",
-    userAgent: "Github user mkartchner994 personal blog", 
+    userAgent: "Github user mkartchner994 personal blog",
     ...args,
   });
 }
@@ -411,6 +416,41 @@ test(`FOUND 404 in cache, max404CacheTimeInMilliseconds provided HAS NOT elapsed
   const expectedResponse = {
     status: "notFound",
     content: "",
+    cacheHit: true,
+  };
+  expect(response).toEqual(expectedResponse);
+  foundFileOnGitHub.close();
+});
+
+test(`FOUND in cache, maxAgeInMilliseconds provided HAS elapsed, SHOULD retry for new content - return { status: "found", cacheHit: false, content: <serialized content> }`, async () => {
+  foundFileOnGitHub.listen();
+  const cache = Cache({ foundInCache: true, typeMaxAge: true });
+  const response = await getContentFromMkartchner994({
+    serialize: serialize,
+    ignoreCache: false,
+    cache: cache,
+    maxAgeInMilliseconds: 1,
+  });
+  const expectedResponse = {
+    status: "found",
+    content: await serialize(CONTENT),
+    cacheHit: false,
+  };
+  expect(response).toEqual(expectedResponse);
+  foundFileOnGitHub.close();
+});
+
+test(`FOUND in cache, maxAgeInMilliseconds provided HAS NOT elapsed, SHOULD NOT retry for new content - return { status: "found", cacheHit: true, content: <cached content> }`, async () => {
+  foundFileOnGitHub.listen();
+  const cache = Cache({ foundInCache: true, typeMaxAge: true });
+  const response = await getContentFromMkartchner994({
+    ignoreCache: false,
+    cache: cache,
+    maxAgeInMilliseconds: 10000,
+  });
+  const expectedResponse = {
+    status: "found",
+    content: CONTENT,
     cacheHit: true,
   };
   expect(response).toEqual(expectedResponse);
