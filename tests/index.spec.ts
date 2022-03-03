@@ -176,6 +176,7 @@ test(`NOT FOUND in cache, FOUND in GitHub, YES serialize method provided - retur
   const expectedResponse = {
     status: "found",
     content: await serialize(CONTENT),
+    etag: ETAG,
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);
@@ -192,6 +193,7 @@ test(`NOT FOUND in cache, FOUND in GitHub, NO serialize method provided - return
   const expectedResponse = {
     status: "found",
     content: CONTENT,
+    etag: ETAG,
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);
@@ -211,6 +213,8 @@ test(`FOUND in cache, UPDATE NOT FOUND in GitHub - return { status: "found", cac
     status: "found",
     // @ts-ignore
     content: cachedResults.content,
+    // @ts-ignore
+    etag: cachedResults.etag,
     cacheHit: true,
   };
   expect(response).toEqual(expectedResponse);
@@ -233,6 +237,7 @@ test(`FOUND in cache, UPDATE FOUND in GitHub - return { status: "found", cacheHi
   const expectedResponse = {
     status: "found",
     content: await serialize(CONTENT_UPDATED),
+    etag: ETAG,
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);
@@ -287,6 +292,7 @@ test(`NOT FOUND in cache, GitHub rate limit exceeded - return { status: "rateLim
     remaining: 0,
     timestampTillNextResetInSeconds: SECONDS_UNTIL_NEXT_RESET,
     content: "",
+    etag: "",
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);
@@ -309,6 +315,8 @@ test(`FOUND in cache, GitHub rate limit exceeded - return { status: "rateLimitEx
     timestampTillNextResetInSeconds: SECONDS_UNTIL_NEXT_RESET,
     // @ts-ignore
     content: cachedResults.content,
+    // @ts-ignore
+    etag: cachedResults.etag,
     cacheHit: true,
   };
   expect(response).toEqual(expectedResponse);
@@ -326,6 +334,7 @@ test(`FOUND in cache, ignoreCache TRUE, FOUND in GitHub - return { status: "foun
   const expectedResponse = {
     status: "found",
     content: await serialize(CONTENT),
+    etag: ETAG,
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);
@@ -362,6 +371,8 @@ test(`FOUND in cache, INTERNAL SERVER ERROR from GitHub - return { status: "foun
     status: "found",
     // @ts-ignore
     content: cachedResults.content,
+    // @ts-ignore
+    etag: cachedResults.etag,
     cacheHit: true,
   };
   expect(response).toEqual(expectedResponse);
@@ -401,6 +412,7 @@ test(`FOUND 404 in cache, max404AgeInMilliseconds provided HAS elapsed, SHOULD r
   const expectedResponse = {
     status: "found",
     content: await serialize(CONTENT),
+    etag: ETAG,
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);
@@ -438,6 +450,7 @@ test(`FOUND in cache, maxAgeInMilliseconds provided HAS elapsed, SHOULD retry fo
   const expectedResponse = {
     status: "found",
     content: await serialize(CONTENT),
+    etag: ETAG,
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);
@@ -457,6 +470,7 @@ test(`FOUND in cache, maxAgeInMilliseconds provided HAS elapsed, UPDATE NOT FOUN
   const expectedResponse = {
     status: "found",
     content: CONTENT,
+    etag: ETAG,
     cacheHit: true,
   };
   expect(response).toEqual(expectedResponse);
@@ -476,6 +490,7 @@ test(`FOUND in cache, maxAgeInMilliseconds provided HAS NOT elapsed, SHOULD NOT 
   const expectedResponse = {
     status: "found",
     content: CONTENT,
+    etag: ETAG,
     cacheHit: true,
   };
   expect(response).toEqual(expectedResponse);
@@ -519,6 +534,7 @@ test(`Error when 'setting' to cache, FOUND in GitHub - return { status: "found",
   const expectedResponse = {
     status: "found",
     content: await serialize(CONTENT),
+    etag: ETAG,
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);

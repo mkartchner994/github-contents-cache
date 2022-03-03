@@ -35,7 +35,7 @@ type GetGithubContentArgs = {
 };
 
 type GetGithubContentReturn =
-  | { status: "found"; content: any; cacheHit: boolean }
+  | { status: "found"; content: any; etag: string; cacheHit: boolean }
   | { status: "notFound"; content: ""; cacheHit: boolean }
   | {
       status: "rateLimitExceeded";
@@ -43,6 +43,7 @@ type GetGithubContentReturn =
       remaining: number;
       timestampTillNextResetInSeconds: number;
       content?: any; // If we have hit our rate limit but we still have a cached value
+      etag?: string;
       cacheHit?: boolean;
     }
   | {
@@ -133,6 +134,7 @@ export default async function getGithubContent({
     return {
       status: "found",
       content: result.data.content,
+      etag: result.data.etag,
       cacheHit: result.data.cacheHit,
     };
   }
@@ -147,6 +149,7 @@ export default async function getGithubContent({
       timestampTillNextResetInSeconds:
         result.data.timestampTillNextResetInSeconds,
       content: result.data.content,
+      etag: result.data.etag,
       cacheHit: result.data.cacheHit,
     };
   }
@@ -201,6 +204,7 @@ const lookInCache = async (stepContext: GetGithubContentStepContext) => {
           return {
             nextEvent: "onFound",
             content: cachedResults.content,
+            etag: cachedResults.etag,
             cacheHit: true,
           };
         }
@@ -249,6 +253,7 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
       return {
         nextEvent: "onFound",
         content: stepContext.cachedResults.content,
+        etag: stepContext.cachedResults.etag,
         cacheHit: true,
       };
     }
@@ -277,6 +282,8 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
         content:
           (stepContext.cachedResults && stepContext.cachedResults.content) ??
           "",
+        etag:
+          (stepContext.cachedResults && stepContext.cachedResults.etag) ?? "",
         cacheHit:
           stepContext.cachedResults && stepContext.cachedResults.content
             ? true
@@ -309,6 +316,7 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
     return {
       nextEvent: "onFound",
       content: resp.content,
+      etag: resp.etag,
       cacheHit: false,
     };
   } catch (error: any) {
@@ -322,6 +330,7 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
       return {
         nextEvent: "onFound",
         content: stepContext.cachedResults.content,
+        etag: stepContext.cachedResults.etag,
         cacheHit: true,
       };
     }
