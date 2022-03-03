@@ -30,7 +30,7 @@ type GetGithubContentArgs = {
   cache: GetGithubContentCache;
   ignoreCache?: boolean;
   maxAgeInMilliseconds?: number;
-  max404CacheTimeInMilliseconds?: number;
+  max404AgeInMilliseconds?: number;
   serialize?: (content: string) => Promise<any>;
 };
 
@@ -59,8 +59,9 @@ type GetGithubContentStepContext = {
   path: GetGithubContentArgs["path"];
   userAgent: GetGithubContentArgs["userAgent"];
   maxAgeInMilliseconds: GetGithubContentArgs["maxAgeInMilliseconds"];
-  max404CacheTimeInMilliseconds: GetGithubContentArgs["max404CacheTimeInMilliseconds"];
+  max404AgeInMilliseconds: GetGithubContentArgs["max404AgeInMilliseconds"];
   serialize: GetGithubContentArgs["serialize"];
+  maxAgeInMillisecondsExpired?: boolean;
   cachedResults?: {
     time: number;
     content: any;
@@ -77,7 +78,7 @@ export default async function getGithubContent({
   cache,
   maxAgeInMilliseconds,
   ignoreCache = false,
-  max404CacheTimeInMilliseconds = Infinity,
+  max404AgeInMilliseconds = Infinity,
   serialize = async (content: string) => content,
 }: GetGithubContentArgs): Promise<GetGithubContentReturn> {
   if (!token || !owner || !repo || !path || !userAgent || !cache) {
@@ -97,7 +98,7 @@ export default async function getGithubContent({
       userAgent,
       serialize,
       maxAgeInMilliseconds,
-      max404CacheTimeInMilliseconds,
+      max404AgeInMilliseconds,
     },
     steps: {
       clearCacheEntry: {
@@ -186,7 +187,7 @@ const lookInCache = async (stepContext: GetGithubContentStepContext) => {
       if (cachedResults.type === "notFound") {
         if (
           Date.now() - cachedResults.time >
-          stepContext.max404CacheTimeInMilliseconds
+          stepContext.max404AgeInMilliseconds
         ) {
           return { nextEvent: "on404CacheExpired" };
         }
@@ -203,6 +204,7 @@ const lookInCache = async (stepContext: GetGithubContentStepContext) => {
             cacheHit: true,
           };
         }
+        stepContext.maxAgeInMillisecondsExpired = true;
       }
       stepContext.cachedResults = cachedResults;
       return { nextEvent: "onFoundInCache" };
@@ -228,6 +230,22 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
     });
     // If the content isn't modified return what is in our cache
     if (resp.statusCode === 304) {
+      // If we got here because the maxAgeInMilliseconds provided had expired
+      // We need to make sure to reset the `time` in the cache or else the cached time
+      // would always be passed the maxAgeInMilliseconds from that point on
+      if (stepContext.maxAgeInMillisecondsExpired === true) {
+        try {
+          await stepContext.cache.set(stepContext.path, {
+            type: "found",
+            time: Date.now(),
+            content: stepContext.cachedResults.content,
+            etag: stepContext.cachedResults.etag,
+          });
+        } catch (error) {
+          // Ignore errors we get if trying to set content to the cache
+          // These should be handled in the cache.set method by the caller
+        }
+      }
       return {
         nextEvent: "onFound",
         content: stepContext.cachedResults.content,
@@ -235,7 +253,7 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
       };
     }
     // This file wasn't found in github, cache the 404 response so we don't hit our api limit
-    // Using the time field with the max404CacheTimeInMilliseconds option to expire this cache entry
+    // Using the time field with the max404AgeInMilliseconds option to expire this cache entry
     if (resp.statusCode === 404) {
       try {
         await stepContext.cache.set(stepContext.path, {

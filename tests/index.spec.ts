@@ -19,6 +19,7 @@ function Cache({
   foundInCache = false,
   type404 = false,
   typeMaxAge = false,
+  setMockFn = (...args) => {},
 }): GetGithubContentCache {
   return {
     get: async () => {
@@ -37,7 +38,9 @@ function Cache({
         etag: ETAG,
       };
     },
-    set: async () => {},
+    set: async (...args) => {
+      setMockFn(...args);
+    },
     remove: async () => {},
   };
 }
@@ -386,14 +389,14 @@ test(`NOT FOUND in cache, INTERNAL SERVER ERROR from GitHub - return { status: "
   internalServerErrorOnGitHub.close();
 });
 
-test(`FOUND 404 in cache, max404CacheTimeInMilliseconds provided HAS elapsed, SHOULD retry for new content - return { status: "found", cacheHit: false, content: <serialized content> }`, async () => {
+test(`FOUND 404 in cache, max404AgeInMilliseconds provided HAS elapsed, SHOULD retry for new content - return { status: "found", cacheHit: false, content: <serialized content> }`, async () => {
   foundFileOnGitHub.listen();
   const cache = Cache({ foundInCache: true, type404: true });
   const response = await getContentFromMkartchner994({
     serialize: serialize,
     ignoreCache: false,
     cache: cache,
-    max404CacheTimeInMilliseconds: 1,
+    max404AgeInMilliseconds: 1,
   });
   const expectedResponse = {
     status: "found",
@@ -404,14 +407,14 @@ test(`FOUND 404 in cache, max404CacheTimeInMilliseconds provided HAS elapsed, SH
   foundFileOnGitHub.close();
 });
 
-test(`FOUND 404 in cache, max404CacheTimeInMilliseconds provided HAS NOT elapsed, SHOULD NOT retry for new content - return { status: "notFound", cacheHit: true, content: "" }`, async () => {
+test(`FOUND 404 in cache, max404AgeInMilliseconds provided HAS NOT elapsed, SHOULD NOT retry for new content - return { status: "notFound", cacheHit: true, content: "" }`, async () => {
   foundFileOnGitHub.listen();
   const cache = Cache({ foundInCache: true, type404: true });
   const response = await getContentFromMkartchner994({
     serialize: serialize,
     ignoreCache: false,
     cache: cache,
-    max404CacheTimeInMilliseconds: 10000,
+    max404AgeInMilliseconds: 10000,
   });
   const expectedResponse = {
     status: "notFound",
@@ -424,7 +427,8 @@ test(`FOUND 404 in cache, max404CacheTimeInMilliseconds provided HAS NOT elapsed
 
 test(`FOUND in cache, maxAgeInMilliseconds provided HAS elapsed, SHOULD retry for new content - return { status: "found", cacheHit: false, content: <serialized content> }`, async () => {
   foundFileOnGitHub.listen();
-  const cache = Cache({ foundInCache: true, typeMaxAge: true });
+  const setMockFn = jest.fn();
+  const cache = Cache({ foundInCache: true, typeMaxAge: true, setMockFn });
   const response = await getContentFromMkartchner994({
     serialize: serialize,
     ignoreCache: false,
@@ -437,12 +441,33 @@ test(`FOUND in cache, maxAgeInMilliseconds provided HAS elapsed, SHOULD retry fo
     cacheHit: false,
   };
   expect(response).toEqual(expectedResponse);
+  expect(setMockFn).toHaveBeenCalled();
   foundFileOnGitHub.close();
+});
+
+test(`FOUND in cache, maxAgeInMilliseconds provided HAS elapsed, UPDATE NOT FOUND in GitHub - return { status: "found", cacheHit: true, content: <cached content> }`, async () => {
+  foundInCacheDidNotChange.listen();
+  const setMockFn = jest.fn();
+  const cache = Cache({ foundInCache: true, typeMaxAge: true, setMockFn });
+  const response = await getContentFromMkartchner994({
+    ignoreCache: false,
+    cache: cache,
+    maxAgeInMilliseconds: 1,
+  });
+  const expectedResponse = {
+    status: "found",
+    content: CONTENT,
+    cacheHit: true,
+  };
+  expect(response).toEqual(expectedResponse);
+  expect(setMockFn).toHaveBeenCalled();
+  foundInCacheDidNotChange.close();
 });
 
 test(`FOUND in cache, maxAgeInMilliseconds provided HAS NOT elapsed, SHOULD NOT retry for new content - return { status: "found", cacheHit: true, content: <cached content> }`, async () => {
   foundFileOnGitHub.listen();
-  const cache = Cache({ foundInCache: true, typeMaxAge: true });
+  const setMockFn = jest.fn();
+  const cache = Cache({ foundInCache: true, typeMaxAge: true, setMockFn });
   const response = await getContentFromMkartchner994({
     ignoreCache: false,
     cache: cache,
@@ -454,6 +479,7 @@ test(`FOUND in cache, maxAgeInMilliseconds provided HAS NOT elapsed, SHOULD NOT 
     cacheHit: true,
   };
   expect(response).toEqual(expectedResponse);
+  expect(setMockFn).not.toHaveBeenCalled();
   foundFileOnGitHub.close();
 });
 

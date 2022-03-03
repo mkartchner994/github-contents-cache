@@ -56,9 +56,14 @@ try {
     // OPTIONAL: Whether or not to use the cache for this request
     // default: false
     ignoreCache: false,
+    // OPTIONAL: How long to wait before allowing a cached 200 to look in GitHub for changes
+    // default: 0 - always check in GitHub for changes
+    // 304 from GitHub does not count against the api limit
+    maxAgeInMilliseconds: 10000,
     // OPTIONAL: How long to wait before allowing a cached 404 to look in GitHub again.
     // default: Infinity - cache indefinitely (pass ignoreCache true to break the cache for the entry)
-    max404CacheTimeInMilliseconds: 10000
+    // 404 from GitHub counts against the api limit
+    max404AgeInMilliseconds: 10000,
     // REQUIRED: Be a good API citizen, pass a useful user agent
     // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#user-agent-required
     userAgent: "GitHub user <your username>",
@@ -119,7 +124,7 @@ try {
   if (results.status === "rateLimitExceeded") {
     // You could use the timestampTillNextResetInSeconds to implement logic to only return cached
     // entries until the reset happens. GitHubs api limits are pretty generous though so you hopefully
-    // would never run into this if your content on GitHub changes infrequently and their aren't 
+    // would never run into this if your content on GitHub changes infrequently and their aren't
     // errors coming from the provided cache instance
     const { content, limit, remaining, timestampTillNextResetInSeconds } = results;
     console.warn(
