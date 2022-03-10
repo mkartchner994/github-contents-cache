@@ -1,16 +1,15 @@
 {
   "name": "github-contents-cache",
-  "version": "0.0.6",
+  "version": "0.0.8",
   "description": "A helpful utility for retrieving and caching file contents from GitHub's contents api",
   "main": "dist/index.js",
-  "types": "types/index.d.ts",
+  "types": "dist/index.d.ts",
   "files": [
-    "dist",
-    "types"
+    "dist"
   ],
   "scripts": {
     "build": "npm test && npm run build:cleanDirs && npm run build:esbuild:node && npm run build:esbuild:cloudflare && npm run build:replaceExtDepRequire && npm run build:tsc",
-    "build:cleanDirs": "rm -rf ./dist/ && rm -rf ./types/",
+    "build:cleanDirs": "rm -rf ./dist/",
     "build:esbuild:node": "esbuild index.ts --bundle --outfile=dist/index.js --platform=node --target=node14 --external:./node_modules/*",
     "build:esbuild:cloudflare": "esbuild cloudflare.ts --bundle --outfile=dist/cloudflare.js --platform=node --target=node14",
     "build:replaceExtDepRequire": "sed -i 's/\\.\\.\\/node_modules\\/follow-redirects\\/https.js/follow-redirects\\/https/g' ./dist/index.js",
