@@ -4,5 +4,5 @@
     "declaration": true,
     "declarationDir": "./types"
   },
-  "files": ["index.ts"]
+  "files": ["index.ts", "cloudflare.ts"]
 }
