@@ -2,7 +2,7 @@
   "compilerOptions": {
     "emitDeclarationOnly": true,
     "declaration": true,
-    "declarationDir": "./types"
+    "declarationDir": "./dist"
   },
-  "files": ["index.ts"]
+  "files": ["index.ts", "cloudflare.ts"]
 }
