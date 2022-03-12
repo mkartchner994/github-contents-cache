@@ -28,6 +28,7 @@ type GetGithubContentArgs = {
   userAgent: string;
   cache: GetGithubContentCache;
   ignoreCache?: boolean;
+  staleWhileRevalidate?: boolean;
   maxAgeInMilliseconds?: number;
   max404AgeInMilliseconds?: number;
   serialize?: (content: string) => Promise<any>;
@@ -61,6 +62,7 @@ type GetGithubContentStepContext = {
   userAgent: GetGithubContentArgs["userAgent"];
   maxAgeInMilliseconds: GetGithubContentArgs["maxAgeInMilliseconds"];
   max404AgeInMilliseconds: GetGithubContentArgs["max404AgeInMilliseconds"];
+  staleWhileRevalidate: GetGithubContentArgs["staleWhileRevalidate"];
   serialize: GetGithubContentArgs["serialize"];
   fetchContent: GetGithubContentArgs["fetchContent"];
   maxAgeInMillisecondsExpired?: boolean;
@@ -80,6 +82,7 @@ async function getGithubContent({
   cache,
   maxAgeInMilliseconds,
   ignoreCache = false,
+  staleWhileRevalidate = false,
   max404AgeInMilliseconds = Infinity,
   serialize = async (content: string) => content,
   fetchContent,
@@ -101,6 +104,7 @@ async function getGithubContent({
       userAgent,
       serialize,
       fetchContent,
+      staleWhileRevalidate,
       maxAgeInMilliseconds,
       max404AgeInMilliseconds,
     },
@@ -199,21 +203,34 @@ const lookInCache = async (stepContext: GetGithubContentStepContext) => {
         }
         return { nextEvent: "on404InCache", cacheHit: true };
       }
+      
+      stepContext.cachedResults = cachedResults;
+      
+      const foundEvent = {
+        nextEvent: "onFound",
+        content: cachedResults.content,
+        etag: cachedResults.etag,
+        cacheHit: true,
+      };
+      
       if (stepContext.maxAgeInMilliseconds) {
         if (
           Date.now() - cachedResults.time <=
           stepContext.maxAgeInMilliseconds
         ) {
-          return {
-            nextEvent: "onFound",
-            content: cachedResults.content,
-            etag: cachedResults.etag,
-            cacheHit: true,
-          };
+          return foundEvent;
         }
         stepContext.maxAgeInMillisecondsExpired = true;
       }
-      stepContext.cachedResults = cachedResults;
+      if (stepContext.staleWhileRevalidate) {
+        try {
+          // Do not await this, we want this to happen in the background (this probably will not work right in a serverless environment)
+          lookInGithub(stepContext);
+        } catch (error) {
+          // Ignore errors here - return our cached value fast but try and update the cache in the background
+        }
+        return foundEvent;
+      }
       return { nextEvent: "onFoundInCache" };
     } catch (error) {
       return {

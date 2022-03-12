@@ -16,6 +16,31 @@ import {
   internalServerErrorOnGitHub,
 } from "./mswServers";
 
+// Wait until a mock is called N number of times before continuing
+// This is helpful for the staleWhileRevalidate tests
+const createWaitableMock = () => {
+  let resolve;
+  let times;
+  let calledCount = 0;
+  const mock = jest.fn();
+  mock.mockImplementation(() => {
+    calledCount += 1;
+    if (resolve && calledCount >= times) {
+      resolve();
+    }
+  });
+
+  // @ts-ignore
+  mock.waitToHaveBeenCalled = (t) => {
+    times = t;
+    return new Promise((r) => {
+      resolve = r;
+    });
+  };
+
+  return mock;
+};
+
 function createTestSuite(platform = "node") {
   const getGithubContentByPlatform =
     platform === "node" ? getGithubContent : getGithubContentCloudflare;
@@ -609,6 +634,72 @@ function createTestSuite(platform = "node") {
       expect(response).toEqual(expectedResponse);
       foundFileOnGitHub.close();
     });
+  });
+
+  test(`FOUND in cache, UPDATE FOUND in GitHub, staleWhileRevalidate true - return cache { status: "found", cacheHit: true, content: <cached content> } - set update in background for next request`, async () => {
+    const now = Date.now();
+    foundFileOnGitHub.listen();
+    const setMockFn = createWaitableMock();
+    const cache = Cache({ foundInCache: true, typeMaxAge: false, setMockFn });
+    const response = await getContentFromMkartchner994({
+      ignoreCache: false,
+      staleWhileRevalidate: true,
+      serialize: serialize,
+      cache: cache,
+    });
+    const cachedResults = await cache.get("test-file.mdx");
+    const expectedResponse = {
+      status: "found",
+      // @ts-ignore
+      content: cachedResults.content,
+      // @ts-ignore
+      etag: cachedResults.etag,
+      cacheHit: true,
+    };
+    expect(response).toEqual(expectedResponse);
+    // @ts-ignore
+    await setMockFn.waitToHaveBeenCalled(1);
+    const args = setMockFn.mock.calls[0];
+    expect(args[0]).toEqual("test-file.mdx");
+    expect(args[1].type).toEqual("found");
+    expect(args[1].content).toEqual(await serialize(CONTENT));
+    expect(args[1].etag).toEqual(ETAG);
+    expect(args[1].time).toBeGreaterThanOrEqual(now);
+    foundFileOnGitHub.close();
+  });
+
+  test(`FOUND in cache, UPDATE NOT FOUND in GitHub, maxAgeInMilliseconds EXPIRED, staleWhileRevalidate true - return cache { status: "found", cacheHit: true, content: <cached content> } - set update in background for next request`, async () => {
+    const now = Date.now();
+    foundInCacheDidNotChange.listen();
+    const setMockFn = createWaitableMock();
+    const cache = Cache({ foundInCache: true, typeMaxAge: true, setMockFn });
+    const response = await getContentFromMkartchner994({
+      ignoreCache: false,
+      staleWhileRevalidate: true,
+      cache: cache,
+      maxAgeInMilliseconds: 1,
+    });
+    const cachedResults = await cache.get("test-file.mdx");
+    const expectedResponse = {
+      status: "found",
+      // @ts-ignore
+      content: cachedResults.content,
+      // @ts-ignore
+      etag: cachedResults.etag,
+      cacheHit: true,
+    };
+    expect(response).toEqual(expectedResponse);
+    // @ts-ignore
+    await setMockFn.waitToHaveBeenCalled(1);
+    const args = setMockFn.mock.calls[0];
+    expect(args[0]).toEqual("test-file.mdx");
+    expect(args[1].type).toEqual("found");
+    // @ts-ignore
+    expect(args[1].content).toEqual(cachedResults.content);
+    // @ts-ignore
+    expect(args[1].etag).toEqual(cachedResults.etag);
+    expect(args[1].time).toBeGreaterThanOrEqual(now);
+    foundInCacheDidNotChange.close();
   });
 }
 

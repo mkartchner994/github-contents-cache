@@ -53,27 +53,9 @@ try {
     repo: REPO,
     // REQUIRED: Path from the root of the repo
     path: `content/${slug}.mdx`,
-    // OPTIONAL: Whether or not to use the cache for this request
-    // default: false
-    ignoreCache: false,
-    // OPTIONAL: How long to wait before allowing a cached 200 to look in GitHub for changes
-    // default: 0 - always check in GitHub for changes
-    // 304 from GitHub does not count against the api limit
-    maxAgeInMilliseconds: 10000,
-    // OPTIONAL: How long to wait before allowing a cached 404 to look in GitHub again.
-    // default: Infinity - cache indefinitely (pass ignoreCache true to break the cache for the entry)
-    // 404 from GitHub counts against the api limit
-    max404AgeInMilliseconds: 10000,
     // REQUIRED: Be a good API citizen, pass a useful user agent
     // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#user-agent-required
     userAgent: "GitHub user <your username>",
-    // OPTIONAL: If you want to transform your file contents in some way before they are cached
-    serialize: async (fileContentsString) => {
-      const { code, frontmatter } = await bundleMDX({
-        source: fileContentsString,
-      });
-      return { code, frontmatter };
-    },
     // REQUIRED: Methods you provided to be able to get, set, and remove content from your cache instance
     // The path arg provided to the get, set, and remove methods below will be the same as the
     // path option given above
@@ -81,7 +63,7 @@ try {
       // Should set the entry in your cache instance. If you want to make updates to the file
       // contents before they are stored - use the serialize method above
       set: async (path, entry) => {
-        await blogCache.set(path, JSON.stringify(entry))
+        await blogCache.set(path, JSON.stringify(entry));
       },
       // Should return the entry exactly as it was provided as the second arg of the set method above
       // If a falsey value is returned, it will be assumed the entry was not found in the cache
@@ -94,8 +76,32 @@ try {
       },
       // Should remove the cache entry
       remove: async (path) => {
-        await blogCache.remove(path)
+        await blogCache.remove(path);
       },
+    },
+    // OPTIONAL: Whether or not to use the cache for this request
+    // default: false
+    ignoreCache: false,
+    // OPTIONAL: How long to wait before allowing a cached 200 to look in GitHub for changes
+    // default: 0 - always check in GitHub for changes
+    // 304 from GitHub does not count against the api limit
+    maxAgeInMilliseconds: 10000,
+    // OPTIONAL: How long to wait before allowing a cached 404 to look in GitHub again.
+    // default: Infinity - cache indefinitely (pass ignoreCache true to break the cache for the entry)
+    // 404 from GitHub counts against the api limit
+    max404AgeInMilliseconds: 10000,
+    // OPTIONAL: Allows a stale (maxAgeInMilliseconds has expired) cache entry to be used while the cache entry gets refreshed in the background
+    // default: false - does not revalidate cache entries in the background
+    // Since the cached response will be returned before the cache entry gets revalidated, this will probably not work in a serverless environment
+    // like AWS Lambda as execution of the script will be stop once a response is returned. In those environments, it might work best to set a
+    // longer `maxAgeInMilliseconds` time in conjunction with an outside process (cron?) which invalidates cache entries using `ignoreCache: true`
+    staleWhileRevalidate: false,
+    // OPTIONAL: If you want to transform your file contents in some way before they are cached
+    serialize: async (fileContentsString) => {
+      const { code, frontmatter } = await bundleMDX({
+        source: fileContentsString,
+      });
+      return { code, frontmatter };
     },
   });
 
@@ -126,10 +132,13 @@ try {
     // entries until the reset happens. GitHubs api limits are pretty generous though so you hopefully
     // would never run into this if your content on GitHub changes infrequently and their aren't
     // errors coming from the provided cache instance
-    const { content, limit, remaining, timestampTillNextResetInSeconds } = results;
-    console.warn(
-      "We've reached our github api limit", { limit, remaining, timestampTillNextResetInSeconds }
-    );
+    const { content, limit, remaining, timestampTillNextResetInSeconds } =
+      results;
+    console.warn("We've reached our github api limit", {
+      limit,
+      remaining,
+      timestampTillNextResetInSeconds,
+    });
     // Hit the limit but we found something in the cache for this request
     if (results.cacheHit) {
       return {
