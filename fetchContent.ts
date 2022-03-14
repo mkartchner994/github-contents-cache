@@ -1,27 +1,6 @@
+import type { FetchContentArgs, FetchContentReturn } from "./fetchTypes";
 import { request } from "follow-redirects/https";
 import { extname } from "path";
-
-type FetchContentArgs = {
-  token: string;
-  owner: string;
-  repo: string;
-  path: string;
-  userAgent: string;
-  etag?: string;
-};
-
-type FetchContentReturn =
-  | {
-      statusCode: 403;
-      limit: number;
-      remaining: number;
-      timestampTillNextResetInSeconds: number;
-    }
-  | {
-      statusCode: 200 | 304 | 404;
-      content?: string;
-      etag?: string;
-    };
 
 export default async function fetchContent({
   owner,

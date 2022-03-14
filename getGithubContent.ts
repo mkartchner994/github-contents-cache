@@ -1,3 +1,4 @@
+import type { FetchContentFn } from "./fetchTypes";
 import controlFlow from "./controlFlow";
 
 type GetGithubContentCacheEntry =
@@ -20,7 +21,7 @@ export type GetGithubContentCache = {
   remove: (path: string) => Promise<any>;
 };
 
-type GetGithubContentArgs = {
+export interface GetGithubContentArgs {
   token: string;
   owner: string;
   repo: string;
@@ -32,8 +33,11 @@ type GetGithubContentArgs = {
   maxAgeInMilliseconds?: number;
   max404AgeInMilliseconds?: number;
   serialize?: (content: string) => Promise<any>;
-  fetchContent: (...args: any) => Promise<any>;
-};
+}
+
+interface GetGithubContentArgsWithfetchContent extends GetGithubContentArgs {
+  fetchContent: FetchContentFn;
+}
 
 type GetGithubContentReturn =
   | { status: "found"; content: any; etag: string; cacheHit: boolean }
@@ -64,7 +68,7 @@ type GetGithubContentStepContext = {
   max404AgeInMilliseconds: GetGithubContentArgs["max404AgeInMilliseconds"];
   staleWhileRevalidate: GetGithubContentArgs["staleWhileRevalidate"];
   serialize: GetGithubContentArgs["serialize"];
-  fetchContent: GetGithubContentArgs["fetchContent"];
+  fetchContent: GetGithubContentArgsWithfetchContent["fetchContent"];
   maxAgeInMillisecondsExpired?: boolean;
   cachedResults?: {
     time: number;
@@ -86,7 +90,7 @@ async function getGithubContent({
   max404AgeInMilliseconds = Infinity,
   serialize = async (content: string) => content,
   fetchContent,
-}: GetGithubContentArgs): Promise<GetGithubContentReturn> {
+}: GetGithubContentArgsWithfetchContent): Promise<GetGithubContentReturn> {
   if (!token || !owner || !repo || !path || !userAgent || !cache) {
     throw new Error(
       "Please provide all of the required arguments - { token, owner, repo, path, userAgent, cache }"
@@ -203,16 +207,16 @@ const lookInCache = async (stepContext: GetGithubContentStepContext) => {
         }
         return { nextEvent: "on404InCache", cacheHit: true };
       }
-      
+
       stepContext.cachedResults = cachedResults;
-      
+
       const foundEvent = {
         nextEvent: "onFound",
         content: cachedResults.content,
         etag: cachedResults.etag,
         cacheHit: true,
       };
-      
+
       if (stepContext.maxAgeInMilliseconds) {
         if (
           Date.now() - cachedResults.time <=
@@ -363,7 +367,9 @@ const lookInGithub = async (stepContext: GetGithubContentStepContext) => {
   }
 };
 
-const getGithubContentFactory = (fetchContent) => (options) =>
-  getGithubContent({ ...options, fetchContent });
+function getGithubContentFactory(fetchContent: FetchContentFn) {
+  return (options: GetGithubContentArgs): Promise<GetGithubContentReturn> =>
+    getGithubContent({ ...options, fetchContent });
+}
 
 export default getGithubContentFactory;

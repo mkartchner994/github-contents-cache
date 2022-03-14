@@ -1,24 +1,4 @@
-type FetchContentArgs = {
-  token: string;
-  owner: string;
-  repo: string;
-  path: string;
-  userAgent: string;
-  etag?: string;
-};
-
-type FetchContentReturn =
-  | {
-      statusCode: 403;
-      limit: number;
-      remaining: number;
-      timestampTillNextResetInSeconds: number;
-    }
-  | {
-      statusCode: 200 | 304 | 404;
-      content?: string;
-      etag?: string;
-    };
+import type { FetchContentArgs, FetchContentReturn } from "./fetchTypes";
 
 export default async function fetchContent({
   owner,
@@ -37,18 +17,15 @@ export default async function fetchContent({
         )
       );
     }
-    fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
-      {
-        headers: {
-          accept: "application/vnd.github.v3+json",
-          // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#user-agent-required
-          "user-agent": userAgent,
-          authorization: `token ${token}`,
-          ...(etag ? { "If-None-Match": etag } : {}),
-        },
-      }
-    )
+    fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+      headers: {
+        accept: "application/vnd.github.v3+json",
+        // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#user-agent-required
+        "user-agent": userAgent,
+        authorization: `token ${token}`,
+        ...(etag ? { "If-None-Match": etag } : {}),
+      },
+    })
       .then(async (res) => {
         if (res.status === 200) {
           try {
